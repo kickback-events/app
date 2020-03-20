@@ -1,12 +1,8 @@
 import React, { Component } from 'react'
 import sanitizeHtml from 'sanitize-html'
 import styled from '@emotion/styled'
-import Dropzone from 'react-dropzone'
-import { Mutation } from 'react-apollo'
 import moment from 'moment'
-import DayPickerInput from 'react-day-picker/DayPickerInput'
 import 'react-day-picker/lib/style.css'
-import DefaultTimePicker from 'rc-time-picker'
 import 'rc-time-picker/assets/index.css'
 import DefaultTimezonePicker from 'react-timezone'
 import getEtherPrice from '../../../api/price'
@@ -14,7 +10,6 @@ import { Link } from 'react-router-dom'
 import Dropdown from 'react-dropdown'
 import 'react-dropdown/style.css'
 import { isAddress } from 'web3-utils'
-
 import {
   getDayAndTimeFromDate,
   getDateFromDayAndTime,
@@ -22,7 +17,6 @@ import {
 } from 'utils/dates'
 import { extractNewPartyAddressFromTx, EMPTY_ADDRESS } from 'api/utils'
 
-import { SINGLE_UPLOAD } from 'graphql/mutations'
 import { CREATE_PARTY } from 'graphql/mutations'
 import {
   TOKEN_QUERY,
@@ -35,6 +29,8 @@ import Button from 'components/Forms/Button'
 import TextInput from 'components/Forms/TextInput'
 import TextArea from 'components/Forms/TextArea'
 import Label from 'components/Forms/Label'
+import InputImage from 'components/Forms/InputImage'
+import InputDateTime from 'components/Forms/InputDateTime'
 import { H2 } from 'components/Typography/Basic'
 import SafeQuery from '../../SafeQuery'
 import CurrencyPicker from './CurrencyPicker'
@@ -56,88 +52,6 @@ const TimezonePicker = styled(DefaultTimezonePicker)`
   }
 `
 
-const DayPickerInputWrapper = styled('div')`
-  margin-right: 10px;
-  input {
-    border: 1px solid #edeef4;
-    border-radius: 6px;
-    color: #2b2b2b;
-    height: 40px;
-    font-size: 14px;
-    padding-left: 17px;
-  }
-`
-
-const TimePicker = styled(DefaultTimePicker)`
-  input {
-    border-radius: 6px;
-    border: 1px solid #edeef4;
-    color: #2b2b2b;
-    height: 40px;
-    font-size: 14px;
-    padding-left: 17px;
-  }
-`
-
-const primary2 = `hsla(237, 75%, 72%, 1)`
-
-const NoImage = styled('div')`
-  color: white;
-  background: ${primary2};
-  max-width: 100%;
-  height: 300px;
-  padding: 40px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: bold;
-  border-radius: 6px;
-  box-shadow: 0 2px 0 hsla(0, 0%, 100%, 0.15)
-
-  &:hover {
-    cursor: pointer;
-  }
-`
-
-const ImageWrapper = styled('div')`
-  display: flex;
-  border-radius: 6px;
-
-  &:before {
-    content: "${p => p.text}";
-    border-radius: 6px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    opacity: 0;
-    transition: 0.2s;
-    position: absolute;
-    left: 0;
-    top: 0;
-    color: white;
-    width: 100%;
-    height: 100%;
-    background: rgba(110, 118, 255, 0.85);
-    box-shadow: 0 2px 0 hsla(0, 0%, 100%, 0.15)
-  }
-  &:hover {
-    cursor: pointer;
-    &:before {
-      opacity: 1;
-    }
-  }
-`
-
-const DropZoneWrapper = styled('div')`
-  margin-bottom: 20px;
-`
-
-const UploadedImage = ({ src, text }) => (
-  <ImageWrapper text={text}>
-    <img alt="event" src={src} />
-  </ImageWrapper>
-)
-
 const Actions = styled('div')`
   display: flex;
   flex-direction: column;
@@ -150,10 +64,6 @@ function getButtonText(type) {
     edit: 'Update Event'
   }[type]
 }
-
-const DateContent = styled('div')`
-  display: flex;
-`
 
 const CommitmentInput = styled(TextInput)`
   width: 170px;
@@ -190,38 +100,6 @@ const visibilityOptions = [
     value: 'private'
   }
 ]
-
-const ImageInput = ({ image, uploading, onDrop }) => {
-  return (
-    <InputWrapper>
-      <Label>Image</Label>
-      <DropZoneWrapper>
-        <Mutation mutation={SINGLE_UPLOAD}>
-          {mutate => (
-            <Dropzone
-              className="dropzone"
-              onDrop={files => onDrop(files, mutate)}
-              accept="image/*"
-            >
-              {image ? (
-                <UploadedImage
-                  src={image}
-                  text="Click or drop a file to change photo"
-                />
-              ) : (
-                <NoImage>
-                  {uploading
-                    ? 'Uploading...'
-                    : 'Click or drop a file to change photo'}
-                </NoImage>
-              )}
-            </Dropzone>
-          )}
-        </Mutation>
-      </DropZoneWrapper>
-    </InputWrapper>
-  )
-}
 
 const TokenSelector = ({
   currencyType,
@@ -317,31 +195,6 @@ const DepositInput = ({
         {isAddress(tokenAddress) &&
           commitmentInUsd({ currencyType, symbol, price, deposit })}
       </CommitmentInUsdContainer>
-    </InputWrapper>
-  )
-}
-
-const DateTimeInput = ({ label, day, time, setDay, setTime }) => {
-  return (
-    <InputWrapper>
-      <Label>{label}</Label>
-      <DateContent>
-        <DayPickerInputWrapper>
-          <DayPickerInput value={day} onDayChange={setDay} />
-        </DayPickerInputWrapper>
-        <TimePicker
-          showSecond={false}
-          defaultValue={time}
-          onChange={value => {
-            if (value) {
-              setTime(value)
-            } else {
-              setTime(moment())
-            }
-          }}
-          format="h:mm a"
-        />
-      </DateContent>
     </InputWrapper>
   )
 }
@@ -518,28 +371,37 @@ class PartyForm extends Component {
               }}
             />
           </InputWrapper>
-          <DateTimeInput
-            label="Start Date"
-            day={startDay}
-            time={startTime}
-            setDay={startDay => this.setState({ startDay })}
-            setTime={startTime => this.setState({ startTime })}
-          />
-          <DateTimeInput
-            label="End Date"
-            day={endDay}
-            time={endTime}
-            setDay={endDay => this.setState({ endDay })}
-            setTime={endTime => this.setState({ endTime })}
-          />
-          <DateTimeInput
-            label="Arrive By Date"
-            day={arriveByDay}
-            time={arriveByTime}
-            setDay={arriveByDay => this.setState({ arriveByDay })}
-            setTime={arriveByTime => this.setState({ arriveByTime })}
-          />
-          <ImageInput image={headerImg} onDrop={this.uploadImage} />
+          <InputWrapper>
+            <Label>Start Date</Label>
+            <InputDateTime
+              day={startDay}
+              time={startTime}
+              setDay={startDay => this.setState({ startDay })}
+              setTime={startTime => this.setState({ startTime })}
+            />
+          </InputWrapper>
+          <InputWrapper>
+            <Label>End Date</Label>
+            <InputDateTime
+              day={endDay}
+              time={endTime}
+              setDay={endDay => this.setState({ endDay })}
+              setTime={endTime => this.setState({ endTime })}
+            />
+          </InputWrapper>
+          <InputWrapper>
+            <Label>Arrive By Date</Label>
+            <InputDateTime
+              day={arriveByDay}
+              time={arriveByTime}
+              setDay={arriveByDay => this.setState({ arriveByDay })}
+              setTime={arriveByTime => this.setState({ arriveByTime })}
+            />
+          </InputWrapper>
+          <InputWrapper>
+            <Label>Image</Label>
+            <InputImage image={headerImg} onDrop={this.uploadImage} />
+          </InputWrapper>
           <InputWrapper>
             <Label>Visibility</Label>
             <VisibilityDropdown
