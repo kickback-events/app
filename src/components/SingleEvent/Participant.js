@@ -58,7 +58,29 @@ const TwitterAvatar = styled(DefaultTwitterAvatar)`
   margin-bottom: 5px;
 `
 
-function Participant({ participant, party, amAdmin, decimals }) {
+const OrgAvatarImg = styled(`img`)`
+  width: 15px;
+  margin: 2px, 5px;
+`
+
+const OrgAvatars = function({ spaces }) {
+  return (
+    <div>
+      {spaces.map(s => (
+        <OrgAvatarImg src={s.avatar} alt={s.id} title={s.id}></OrgAvatarImg>
+      ))}
+    </div>
+  )
+}
+
+function Participant({
+  participant,
+  party,
+  amAdmin,
+  decimals,
+  contributions,
+  spaces
+}) {
   const { user, status } = participant
   const { deposit, ended } = party
 
@@ -69,7 +91,9 @@ function Participant({ participant, party, amAdmin, decimals }) {
   const numShowedUp = calculateNumAttended(party.participants)
 
   const payout = calculateWinningShare(deposit, numRegistered, numShowedUp)
-
+  const contribution = contributions.filter(
+    c => c.senderAddress === participant.user.address
+  )[0]
   return (
     <GlobalConsumer>
       {({ userAddress, loggedIn }) => (
@@ -78,16 +102,30 @@ function Participant({ participant, party, amAdmin, decimals }) {
           <ParticipantId>
             <ParticipantUsername>{user.username}</ParticipantUsername>
           </ParticipantId>
+          <OrgAvatars spaces={spaces} />
           {ended ? (
             attended ? (
-              <Status type="won">
-                {`${withdrawn ? ' Withdrew' : 'Won'} `}
-                <Currency
-                  amount={payout}
-                  tokenAddress={party.tokenAddress}
-                  precision={3}
-                />
-              </Status>
+              contribution ? (
+                <Status type="contributed">
+                  <span role="img" aria-label="sheep">
+                    🎁&nbsp;
+                  </span>
+                  <Currency
+                    amount={contribution.amount}
+                    tokenAddress={party.tokenAddress}
+                    precision={3}
+                  />
+                </Status>
+              ) : (
+                <Status type="won">
+                  {`${withdrawn ? ' Withdrew' : 'Won'} `}
+                  <Currency
+                    amount={payout}
+                    tokenAddress={party.tokenAddress}
+                    precision={3}
+                  />
+                </Status>
+              )
             ) : (
               <Status type="lost">
                 Lost{' '}

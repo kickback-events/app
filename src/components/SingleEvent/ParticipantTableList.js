@@ -2,7 +2,8 @@ import _ from 'lodash'
 import React, { Component } from 'react'
 import styled from '@emotion/styled'
 import { PARTICIPANT_STATUS, getSocialId } from '@wearekickback/shared'
-
+import CheckWhitelist from './CheckWhitelist'
+import TableList from './TableList'
 import {
   amAdmin,
   getMyParticipantEntry,
@@ -45,7 +46,7 @@ const Button = styled(DefaultButton)`
 
 const NoParticipants = styled('div')``
 
-const TableList = styled('div')`
+const TableListContainer = styled('div')`
   display: flex;
   max-width: 100%;
   flex-direction: column;
@@ -86,10 +87,10 @@ const DownloadButton = styled(Button)`
 
 const cells = [
   { label: 'Username', value: 'user.username' },
-  { label: 'Real Name', value: 'user.realName' },
-  { label: 'Address', value: 'user.address' },
-  { label: 'Email' },
-  { label: 'Twitter' }
+  { label: 'Twitter' },
+  { label: 'Real Name', value: 'user.realName', private: true },
+  { label: 'Address', value: 'user.address', private: true },
+  { label: 'Email', private: true }
 ]
 
 function getStatus(ended, attended, withdrawn) {
@@ -126,7 +127,7 @@ function getEmail(email) {
   }
 }
 
-function getTableCell(cell, i, participant) {
+function getTableCell(cell, i, participant, displayPrivateInfo) {
   const cells = {
     Email: <TD key={i}>{getEmail(participant.user.email)}</TD>,
     Twitter: <TD key={i}>{getSocialId(participant.user.social, 'twitter')}</TD>,
@@ -136,7 +137,7 @@ function getTableCell(cell, i, participant) {
       </TD>
     )
   }
-
+  if (cell.private && !displayPrivateInfo) return null
   if (cells[cell.label]) {
     return cells[cell.label]
   } else if (cell.hidden === true) {
@@ -149,7 +150,8 @@ function getTableCell(cell, i, participant) {
 class SingleEventWrapper extends Component {
   state = {
     search: '',
-    selectedFilter: null
+    selectedFilter: null,
+    displayPrivateInfo: false
   }
 
   handleSearch = value => {
@@ -160,6 +162,12 @@ class SingleEventWrapper extends Component {
 
   handleFilterChange = selectedFilter => {
     this.setState({ selectedFilter })
+  }
+
+  handleCheckBox = e => {
+    this.setState({
+      displayPrivateInfo: e.target.checked
+    })
   }
 
   downloadCSV(csv, filename) {
@@ -205,7 +213,6 @@ class SingleEventWrapper extends Component {
 
       csv.push(row.join(','))
     }
-
     // Download CSV
     this.downloadCSV(csv.join('\n'), filename)
   }
@@ -242,8 +249,7 @@ class SingleEventWrapper extends Component {
                     )
                   }
                 }
-                const { participants, ended } = party
-
+                const { participants, ended, optional } = party
                 // pre-calculate some stuff up here
                 const preCalculatedProps = {
                   amAdmin: amAdmin(party, userAddress),
@@ -252,144 +258,63 @@ class SingleEventWrapper extends Component {
 
                 preCalculatedProps.amAdmin = amAdmin(party, userAddress)
                 const lastParticipant = participants[participants.length - 1]
-                return (
-                  <TableList>
-                    <MarkedAttendedInfo>
-                      <p>Marked attended:</p>
-                      <Number
-                        number={getParticipantsMarkedAttended(participants)}
-                        max={participants.length}
-                        progress={
-                          (getParticipantsMarkedAttended(participants) /
-                            participants.length) *
-                          100
+
+                if (
+                  optional &&
+                  optional.event_whitelist &&
+                  !!optional.event_whitelist.address
+                ) {
+                  return (
+                    <CheckWhitelist
+                      userAddresses={participants.map(p => p.user.address)}
+                      tokenAddress={optional.event_whitelist.address}
+                    >
+                      {a => {
+                        for (let i = 0; i < participants.length; i++) {
+                          const participant = participants[i]
+                          const balance =
+                            a.getMainnetTokenBalance.balances[i] /
+                            Math.pow(10, a.getMainnetTokenBalance.decimals)
+                          participant.user.whiteList = {
+                            balance,
+                            symbol: a.getMainnetTokenBalance.symbol
+                          }
                         }
-                      />
-                      {!lastParticipant ||
-                      participants.length === lastParticipant.index ? null : (
-                        <Mismatched>
-                          The total participants ({participants.length}) does
-                          not match with participant index (
-                          {lastParticipant.index}). May have missing participant
-                          info due to reorg.
-                        </Mismatched>
-                      )}
-                    </MarkedAttendedInfo>
-                    {participants.length > 0 ? (
-                      <>
-                        <DownloadButton
-                          type="hollow"
-                          onClick={() => {
-                            const html = document.querySelector('table')
-                              .outerHTML
-                            this.exportTableToCSV(html, 'event.csv')
-                          }}
-                        >
-                          Download CSV
-                        </DownloadButton>
-                        <EventFilters
-                          handleSearch={handleSearch}
-                          handleFilterChange={handleFilterChange}
-                          amAdmin={amAdmin}
-                          search={search}
-                          enableQrCodeScanner={amAdmin}
-                          ended={ended}
-                        />
-
-                        <Table>
-                          <Tbody>
-                            <TR>
-                              <TH>#</TH>
-                              <TH>Action</TH>
-                              <TH>Status</TH>
-                              {cells.map(
-                                cell =>
-                                  !cell.hidden && (
-                                    <TH key={cell.label}>{cell.label}</TH>
-                                  )
-                              )}
-                              <TH>Marketing</TH>
-                            </TR>
-
-                            {participants
-                              .sort(sortParticipants)
-                              .filter(
-                                filterParticipants(selectedFilter, search)
-                              )
-                              .map(participant => {
-                                const { status } = participant
-                                const withdrawn =
-                                  status === PARTICIPANT_STATUS.WITHDRAWN_PAYOUT
-                                const attended =
-                                  status === PARTICIPANT_STATUS.SHOWED_UP ||
-                                  withdrawn
-
-                                return (
-                                  <TR key={participant.user.id}>
-                                    <TD>{participant.index}</TD>
-                                    <TD data-csv="no">
-                                      {' '}
-                                      {ended ? (
-                                        ''
-                                      ) : (
-                                        <>
-                                          <MarkedAttended
-                                            party={party}
-                                            participant={participant}
-                                            refetch={refetch}
-                                          >
-                                            {({
-                                              markAttended,
-                                              unmarkAttended
-                                            }) =>
-                                              attended ? (
-                                                <Button
-                                                  wide
-                                                  onClick={() =>
-                                                    unmarkAttended()
-                                                  }
-                                                  analyticsId="Unmark Attendee"
-                                                >
-                                                  Unmark attended
-                                                </Button>
-                                              ) : (
-                                                <Button
-                                                  wide
-                                                  type="hollow"
-                                                  onClick={() => markAttended()}
-                                                  analyticsId="Mark Attendee"
-                                                >
-                                                  Mark attended <Tick />
-                                                </Button>
-                                              )
-                                            }
-                                          </MarkedAttended>
-                                        </>
-                                      )}
-                                    </TD>
-                                    <TD>
-                                      {getStatus(ended, attended, withdrawn)}
-                                    </TD>
-                                    {cells.map((cell, i) =>
-                                      getTableCell(cell, i, participant)
-                                    )}
-                                    <TD>
-                                      {participant.user.legal &&
-                                      participant.user.legal[2] &&
-                                      participant.user.legal[2].accepted
-                                        ? 'accepted'
-                                        : 'denied'}
-                                    </TD>
-                                  </TR>
-                                )
-                              })}
-                          </Tbody>
-                        </Table>
-                      </>
-                    ) : (
-                      <NoParticipants>No one is attending</NoParticipants>
-                    )}
-                  </TableList>
+                        return (
+                          <TableList
+                            participants={participants}
+                            lastParticipant={lastParticipant}
+                            handleCheckBox={this.handleCheckBox}
+                            handleSearch={handleSearch}
+                            handleFilterChange={handleFilterChange}
+                            search={search}
+                            ended={ended}
+                            selectedFilter={selectedFilter}
+                            party={party}
+                            refetch={refetch}
+                            displayPrivateInfo={this.state.displayPrivateInfo}
+                            exportTableToCSV={this.exportTableToCSV.bind(this)}
+                          ></TableList>
+                        )
+                      }}
+                    </CheckWhitelist>
+                  )
+                }
+                return (
+                  <TableList
+                    participants={participants}
+                    handleCheckBox={this.handleCheckBox}
+                    lastParticipant={lastParticipant}
+                    handleSearch={handleSearch}
+                    handleFilterChange={handleFilterChange}
+                    search={search}
+                    ended={ended}
+                    selectedFilter={selectedFilter}
+                    party={party}
+                    refetch={refetch}
+                    displayPrivateInfo={this.state.displayPrivateInfo}
+                    exportTableToCSV={this.exportTableToCSV}
+                  ></TableList>
                 )
               }}
             </SafeQuery>
